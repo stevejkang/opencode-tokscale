@@ -50,7 +50,10 @@ opencode resolves the npm package on startup automatically.
   "plugin": [["opencode-tokscale", {
     "enabled": true,
     "refreshInterval": 60,
-    "showOpenCodeOnly": true
+    "showOpenCodeOnly": true,
+    "tokenColor": "#FF5733",
+    "costColor": "#AAAAAA",
+    "labelColor": "#FFFFFF"
   }]]
 }
 ```
@@ -59,6 +62,9 @@ opencode resolves the npm package on startup automatically.
 |---|---|---|
 | `refreshInterval` | `60` | Seconds between data refreshes |
 | `showOpenCodeOnly` | `true` | Show only opencode usage (`--opencode` flag). Set `false` for all clients |
+| `tokenColor` | `#0073FF` | Color of the "Tokscale" title and token count values |
+| `costColor` | theme muted | Color of cost values (e.g., `$0.00`) and placeholder states (`...`, `err`, `—`) |
+| `labelColor` | theme primary | Color of time period labels (e.g., "Today", "This Week") |
 
 ## How It Works
 
