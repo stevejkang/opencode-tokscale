@@ -46,6 +46,9 @@ export interface PeriodState {
 export interface TokscalePluginOptions {
   refreshInterval?: number
   showOpenCodeOnly?: boolean
+  tokenColor?: string
+  costColor?: string
+  labelColor?: string
 }
 
 export const PERIOD_FLAGS: Record<TimePeriod, string> = {

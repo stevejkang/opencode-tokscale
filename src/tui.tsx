@@ -11,6 +11,9 @@ const TOKSCALE_BLUE = "#0073FF"
 const tui: TuiPlugin = async (api, options, _meta) => {
   const refreshInterval = ((options as TokscalePluginOptions)?.refreshInterval ?? 60) * 1000
   const showOpenCodeOnly = (options as TokscalePluginOptions)?.showOpenCodeOnly ?? true
+  const tokenColor = (options as TokscalePluginOptions)?.tokenColor ?? TOKSCALE_BLUE
+  const customCostColor = (options as TokscalePluginOptions)?.costColor
+  const customLabelColor = (options as TokscalePluginOptions)?.labelColor
 
   const signals: Record<TimePeriod, [() => PeriodState, (s: PeriodState) => void]> = {} as Record<TimePeriod, [() => PeriodState, (s: PeriodState) => void]>
   for (const period of TIME_PERIODS) {
@@ -61,13 +64,13 @@ const tui: TuiPlugin = async (api, options, _meta) => {
     slots: {
       sidebar_content(ctx: TuiSlotContext, _props: unknown) {
         const t = ctx.theme.current
-        const dim = t.textMuted ?? "#546E7A"
-        const fgColor = t.text ?? "#EEFFFF"
+        const dim = customCostColor ?? t.textMuted ?? "#546E7A"
+        const fgColor = customLabelColor ?? t.text ?? "#EEFFFF"
 
         return (
           <box flexDirection="column" marginBottom={1}>
             <box height={1}>
-              <text fg={TOKSCALE_BLUE}><b>{"Tokscale"}</b></text>
+              <text fg={tokenColor}><b>{"Tokscale"}</b></text>
             </box>
 
             {installed() === false ? (
@@ -87,7 +90,7 @@ const tui: TuiPlugin = async (api, options, _meta) => {
                       <text fg={dim}>{"err"}</text>
                     ) : state.stats ? (
                       <>
-                        <text fg={TOKSCALE_BLUE}>{`${formatTokens(state.stats.totalTokens).padStart(7)}`}</text>
+                        <text fg={tokenColor}>{`${formatTokens(state.stats.totalTokens).padStart(7)}`}</text>
                         <text fg={dim}>{` ${formatCost(state.stats.totalCost).padStart(9)}`}</text>
                       </>
                     ) : (
