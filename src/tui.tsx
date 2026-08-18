@@ -4,7 +4,7 @@ import { createSignal } from "solid-js"
 import type { TimePeriod, PeriodState, TokscalePluginOptions } from "./types"
 import { TIME_PERIODS, PERIOD_LABELS } from "./types"
 import { formatTokens, formatCost } from "./format"
-import { detectTokscale, fetchPeriodStats } from "./tokscale"
+import { detectTokscale, fetchPeriodStats, TokscaleNotFoundError } from "./tokscale"
 
 const TOKSCALE_BLUE = "#0073FF"
 
@@ -45,6 +45,13 @@ const tui: TuiPlugin = async (api, options, _meta) => {
             })
             setState({ status: "success", stats, error: null })
           } catch (e) {
+            if (e instanceof TokscaleNotFoundError) {
+              setInstalled(false)
+              for (const p of TIME_PERIODS) {
+                signals[p][1]({ status: "not-installed", stats: null, error: null })
+              }
+              return
+            }
             setState({ status: "error", stats: signals[period][0]().stats, error: String(e) })
           }
         })

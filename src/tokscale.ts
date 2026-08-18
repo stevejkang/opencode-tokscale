@@ -4,6 +4,13 @@ import { PERIOD_FLAGS } from "./types"
 
 type SemVer = readonly [number, number, number]
 
+export class TokscaleNotFoundError extends Error {
+  constructor() {
+    super("tokscale binary not found")
+    this.name = "TokscaleNotFoundError"
+  }
+}
+
 let cachedDetection: boolean | null = null
 let cachedVersion: SemVer | null = null
 
@@ -70,6 +77,11 @@ export function fetchPeriodStats(
       { timeout: 15000, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
         if (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            resetDetectionCache()
+            reject(new TokscaleNotFoundError())
+            return
+          }
           reject(new Error(`tokscale CLI failed: ${error.message}`))
           return
         }

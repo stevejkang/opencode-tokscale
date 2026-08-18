@@ -29,6 +29,7 @@ import {
   versionAtLeast,
   reportToStats,
   resetDetectionCache,
+  TokscaleNotFoundError,
 } from "../tokscale"
 
 const mockExecFile = vi.mocked(execFile)
@@ -281,6 +282,26 @@ describe("fetchPeriodStats", () => {
     const error = Object.assign(new Error("timeout"), { code: "ETIMEDOUT" as unknown as number })
     mockExecFileError(error)
     await expect(fetchPeriodStats("today")).rejects.toThrow()
+  })
+
+  it("throws TokscaleNotFoundError and resets detection cache on ENOENT", async () => {
+    // Prime cache as installed
+    mockDetectSequence("tokscale 4.0.5")
+    await detectTokscale()
+    vi.clearAllMocks()
+
+    // Now simulate binary gone (ENOENT)
+    const error = Object.assign(new Error("spawn tokscale ENOENT"), {
+      code: "ENOENT" as unknown as number,
+    })
+    mockExecFileError(error)
+
+    await expect(fetchPeriodStats("today")).rejects.toThrow(TokscaleNotFoundError)
+
+    // Detection cache should be reset — next detectTokscale() must re-probe
+    mockExecFileError(Object.assign(new Error("not found"), { code: 1 }))
+    const result = await detectTokscale()
+    expect(result).toBe(false)
   })
 })
 
