@@ -1,6 +1,6 @@
 {
   "name": "opencode-tokscale",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "type": "module",
   "description": "OpenCode TUI sidebar plugin displaying tokscale token usage statistics and costs",
   "exports": {
