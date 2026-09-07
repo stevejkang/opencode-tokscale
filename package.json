@@ -40,10 +40,12 @@
       "optional": true
     }
   },
+  "dependencies": {
+    "@opentui/core": "^0.4.5",
+    "@opentui/solid": "^0.4.5",
+    "solid-js": "^1.9.12"
+  },
   "devDependencies": {
-    "@opentui/core": "^0.1.98",
-    "@opentui/solid": "^0.1.98",
-    "solid-js": "^1.9.12",
     "vitest": "4.1.4"
   }
 }
