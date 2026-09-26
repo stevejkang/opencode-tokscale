@@ -11,12 +11,28 @@ export class TokscaleNotFoundError extends Error {
   }
 }
 
+interface Runner {
+  command: string
+  prefixArgs: readonly string[]
+  probeTimeout: number
+}
+
+// bunx/npx may download tokscale on first use, so their probes get more time.
+// npx gets -y so it never waits for an install confirmation.
+const RUNNERS: readonly Runner[] = [
+  { command: "tokscale", prefixArgs: [], probeTimeout: 5000 },
+  { command: "bunx", prefixArgs: ["tokscale@latest"], probeTimeout: 60000 },
+  { command: "npx", prefixArgs: ["-y", "tokscale@latest"], probeTimeout: 60000 },
+]
+
 let cachedDetection: boolean | null = null
 let cachedVersion: SemVer | null = null
+let cachedRunner: Runner | null = null
 
 export function resetDetectionCache(): void {
   cachedDetection = null
   cachedVersion = null
+  cachedRunner = null
 }
 
 export function getVersion(): SemVer | null {
@@ -37,23 +53,43 @@ export function versionAtLeast(version: SemVer, target: SemVer): boolean {
   return true
 }
 
-export function detectTokscale(): Promise<boolean> {
-  if (cachedDetection !== null) return Promise.resolve(cachedDetection)
-
+function probeRunner(runner: Runner): Promise<{ version: SemVer | null } | null> {
   return new Promise((resolve) => {
-    execFile("which", ["tokscale"], { timeout: 5000 }, (error) => {
-      if (error) {
-        cachedDetection = false
-        resolve(false)
+    execFile("which", [runner.command], { timeout: 5000 }, (whichError) => {
+      if (whichError) {
+        resolve(null)
         return
       }
-      cachedDetection = true
-      execFile("tokscale", ["--version"], { timeout: 5000 }, (_err, stdout) => {
-        cachedVersion = parseVersion(String(stdout ?? ""))
-        resolve(true)
-      })
+      execFile(
+        runner.command,
+        [...runner.prefixArgs, "--version"],
+        { timeout: runner.probeTimeout },
+        (versionError, stdout) => {
+          if (versionError) {
+            resolve(null)
+            return
+          }
+          resolve({ version: parseVersion(String(stdout ?? "")) })
+        },
+      )
     })
   })
+}
+
+export async function detectTokscale(): Promise<boolean> {
+  if (cachedDetection !== null) return cachedDetection
+
+  for (const runner of RUNNERS) {
+    const probe = await probeRunner(runner)
+    if (probe) {
+      cachedRunner = runner
+      cachedVersion = probe.version
+      cachedDetection = true
+      return true
+    }
+  }
+  cachedDetection = false
+  return false
 }
 
 export function fetchPeriodStats(
@@ -70,10 +106,12 @@ export function fetchPeriodStats(
     }
   }
 
+  const runner = cachedRunner ?? RUNNERS[0]
+
   return new Promise((resolve, reject) => {
     execFile(
-      "tokscale",
-      args,
+      runner.command,
+      [...runner.prefixArgs, ...args],
       { timeout: 15000, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
         if (error) {

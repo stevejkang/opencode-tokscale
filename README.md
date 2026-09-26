@@ -26,7 +26,7 @@ https://raw.githubusercontent.com/stevejkang/opencode-tokscale/refs/heads/main/d
 npm i -g @tokscale/cli
 ```
 
-If tokscale isn't found, the plugin shows an install prompt instead of stats.
+A global install is recommended but not required. If `tokscale` isn't in PATH (or its `--version` fails), the plugin falls back to `bunx tokscale@latest`, then `npx -y tokscale@latest`. If none of them work, it shows an install prompt instead of stats.
 
 ### Setup
 
@@ -83,12 +83,12 @@ Three parallel CLI calls per refresh. tokscale processes in ~175ms thanks to its
 |   | What | Why it matters |
 |:---:|---|---|
 | ⏱ | **Auto-refresh** | Configurable interval, default 60 seconds |
-| 🛡 | **Graceful fallback** | No tokscale? Shows install instructions instead of crashing |
+| 🛡 | **Graceful fallback** | No global tokscale? Runs it via `bunx`/`npx`, or shows install instructions if neither works |
 
 ## Requirements
 
 - [opencode](https://opencode.ai) with plugin support (`@opencode-ai/plugin` >= 1.4.3)
-- [tokscale](https://github.com/junhoyeo/tokscale) CLI installed and in PATH
+- [tokscale](https://github.com/junhoyeo/tokscale) CLI in PATH, or `bunx`/`npx` available to run it
 
 ## Manual Install
 

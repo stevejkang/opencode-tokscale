@@ -71,6 +71,28 @@ function mockDetectSequence(versionStdout: string) {
   })
 }
 
+/**
+ * Route execFile calls by command line. `available` lists commands that
+ * `which` can resolve; `versions` maps "<cmd> <args...>" of a --version probe
+ * to its stdout, or to an Error when the probe fails.
+ */
+function mockRunners(available: string[], versions: Record<string, string | Error>) {
+  mockExecFile.mockImplementation((cmd, args, _opts, cb) => {
+    const callback = (typeof _opts === "function" ? _opts : cb) as Function
+    const argv = (args ?? []) as string[]
+    if (cmd === "which") {
+      if (available.includes(argv[0])) callback(null, `/usr/bin/${argv[0]}`, "")
+      else callback(Object.assign(new Error("not found"), { code: 1 }), "", "")
+    } else {
+      const result = versions[[cmd, ...argv].join(" ")]
+      if (result instanceof Error) callback(result, "", "")
+      else if (result !== undefined) callback(null, result, "")
+      else callback(null, validReportJson, "")
+    }
+    return {} as ReturnType<typeof execFile>
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   resetDetectionCache()
@@ -165,21 +187,100 @@ describe("detectTokscale", () => {
     expect(result).toBe(false)
   })
 
-  it("returns true with null version when --version fails", async () => {
-    let callCount = 0
-    mockExecFile.mockImplementation((_cmd, _args, _opts, cb) => {
-      callCount++
-      const callback = typeof _opts === "function" ? _opts : cb
-      if (callCount === 1) {
-        ;(callback as Function)(null, "/usr/local/bin/tokscale", "")
-      } else {
-        ;(callback as Function)(new Error("version failed"), "", "")
-      }
-      return {} as ReturnType<typeof execFile>
-    })
+  it("returns false when global tokscale --version fails and no bunx/npx exists", async () => {
+    mockRunners(["tokscale"], { "tokscale --version": new Error("version failed") })
+    const result = await detectTokscale()
+    expect(result).toBe(false)
+    expect(getVersion()).toBeNull()
+  })
+
+  it("accepts a runner with null version when --version succeeds with unparseable output", async () => {
+    mockRunners(["tokscale"], { "tokscale --version": "dev build" })
     const result = await detectTokscale()
     expect(result).toBe(true)
     expect(getVersion()).toBeNull()
+  })
+})
+
+describe("runner fallback", () => {
+  it("falls back to bunx tokscale@latest when global tokscale is missing", async () => {
+    mockRunners(["bunx", "npx"], { "bunx tokscale@latest --version": "tokscale 4.17.0" })
+    expect(await detectTokscale()).toBe(true)
+    expect(getVersion()).toEqual([4, 17, 0])
+
+    await fetchPeriodStats("today")
+    expect(mockExecFile).toHaveBeenLastCalledWith(
+      "bunx",
+      ["tokscale@latest", "models", "--json", "--today", "--no-spinner", "-c", "opencode"],
+      expect.objectContaining({ timeout: 15000 }),
+      expect.any(Function),
+    )
+  })
+
+  it("falls back to npx -y tokscale@latest when tokscale and bunx are missing", async () => {
+    mockRunners(["npx"], { "npx -y tokscale@latest --version": "tokscale 4.17.0" })
+    expect(await detectTokscale()).toBe(true)
+
+    await fetchPeriodStats("week")
+    expect(mockExecFile).toHaveBeenLastCalledWith(
+      "npx",
+      ["-y", "tokscale@latest", "models", "--json", "--week", "--no-spinner", "-c", "opencode"],
+      expect.objectContaining({ timeout: 15000 }),
+      expect.any(Function),
+    )
+  })
+
+  it("falls back to bunx when global tokscale exists but --version fails", async () => {
+    mockRunners(["tokscale", "bunx"], {
+      "tokscale --version": new Error("broken install"),
+      "bunx tokscale@latest --version": "tokscale 4.17.0",
+    })
+    expect(await detectTokscale()).toBe(true)
+    await fetchPeriodStats("today")
+    expect(mockExecFile).toHaveBeenLastCalledWith(
+      "bunx",
+      expect.arrayContaining(["tokscale@latest", "models"]),
+      expect.any(Object),
+      expect.any(Function),
+    )
+  })
+
+  it("falls back to npx when bunx --version fails", async () => {
+    mockRunners(["bunx", "npx"], {
+      "bunx tokscale@latest --version": new Error("network"),
+      "npx -y tokscale@latest --version": "tokscale 4.17.0",
+    })
+    expect(await detectTokscale()).toBe(true)
+    await fetchPeriodStats("today")
+    expect(mockExecFile).toHaveBeenLastCalledWith(
+      "npx",
+      expect.arrayContaining(["-y", "tokscale@latest", "models"]),
+      expect.any(Object),
+      expect.any(Function),
+    )
+  })
+
+  it("gives bunx/npx probes a longer timeout to allow the first download", async () => {
+    mockRunners(["npx"], { "npx -y tokscale@latest --version": "tokscale 4.17.0" })
+    await detectTokscale()
+    expect(mockExecFile).toHaveBeenCalledWith(
+      "npx",
+      ["-y", "tokscale@latest", "--version"],
+      expect.objectContaining({ timeout: 60000 }),
+      expect.any(Function),
+    )
+  })
+
+  it("prefers global tokscale when it works", async () => {
+    mockRunners(["tokscale", "bunx", "npx"], { "tokscale --version": "tokscale 2.0.22" })
+    expect(await detectTokscale()).toBe(true)
+    expect(getVersion()).toEqual([2, 0, 22])
+    expect(mockExecFile).not.toHaveBeenCalledWith("which", ["bunx"], expect.anything(), expect.anything())
+  })
+
+  it("returns false when no runner is available", async () => {
+    mockRunners([], {})
+    expect(await detectTokscale()).toBe(false)
   })
 })
 
