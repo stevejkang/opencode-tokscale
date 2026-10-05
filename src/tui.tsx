@@ -1,5 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule, TuiSlotContext } from "@opencode-ai/plugin/tui"
+import type { Plugin as V2Plugin } from "@opencode/plugin/tui"
+import type { ColorInput } from "@opentui/core"
 import { createSignal } from "solid-js"
 import type { TimePeriod, PeriodState, TokscalePluginOptions } from "./types"
 import { TIME_PERIODS, PERIOD_LABELS } from "./types"
@@ -8,12 +10,13 @@ import { detectTokscale, fetchPeriodStats, TokscaleNotFoundError } from "./toksc
 
 const TOKSCALE_BLUE = "#0073FF"
 
-const tui: TuiPlugin = async (api, options, _meta) => {
-  const refreshInterval = ((options as TokscalePluginOptions)?.refreshInterval ?? 60) * 1000
-  const showOpenCodeOnly = (options as TokscalePluginOptions)?.showOpenCodeOnly ?? true
-  const tokenColor = (options as TokscalePluginOptions)?.tokenColor ?? TOKSCALE_BLUE
-  const customCostColor = (options as TokscalePluginOptions)?.costColor
-  const customLabelColor = (options as TokscalePluginOptions)?.labelColor
+function startTokscale(rawOptions: unknown) {
+  const options = (rawOptions as TokscalePluginOptions | undefined) ?? {}
+  const refreshInterval = (options.refreshInterval ?? 60) * 1000
+  const showOpenCodeOnly = options.showOpenCodeOnly ?? true
+  const tokenColor = options.tokenColor ?? TOKSCALE_BLUE
+  const customCostColor = options.costColor
+  const customLabelColor = options.labelColor
 
   const signals: Record<TimePeriod, [() => PeriodState, (s: PeriodState) => void]> = {} as Record<TimePeriod, [() => PeriodState, (s: PeriodState) => void]>
   for (const period of TIME_PERIODS) {
@@ -64,59 +67,83 @@ const tui: TuiPlugin = async (api, options, _meta) => {
   refresh()
 
   const timer = setInterval(refresh, refreshInterval)
-  api.lifecycle.onDispose(() => clearInterval(timer))
+  const dispose = () => clearInterval(timer)
+
+  const renderSidebar = (themeText: ColorInput | undefined, themeMuted: ColorInput | undefined) => {
+    const dim = customCostColor ?? themeMuted ?? "#546E7A"
+    const fgColor = customLabelColor ?? themeText ?? "#EEFFFF"
+
+    return (
+      <box flexDirection="column">
+        <box height={1}>
+          <text fg={tokenColor}><b>{"Tokscale"}</b></text>
+        </box>
+
+        {installed() === false ? (
+          <box height={1}>
+            <text fg={dim}>{"Install: npm i -g @tokscale/cli"}</text>
+          </box>
+        ) : (
+          TIME_PERIODS.map((period) => {
+            const state = signals[period][0]()
+            const label = PERIOD_LABELS[period]
+            return (
+              <box height={1} flexDirection="row">
+                <text fg={fgColor}>{`${label.padEnd(12)}`}</text>
+                {state.status === "loading" && !state.stats ? (
+                  <text fg={dim}>{"..."}</text>
+                ) : state.status === "error" && !state.stats ? (
+                  <text fg={dim}>{"err"}</text>
+                ) : state.stats ? (
+                  <>
+                    <text fg={tokenColor}>{`${formatTokens(state.stats.totalTokens).padStart(7)}`}</text>
+                    <text fg={dim}>{` ${formatCost(state.stats.totalCost).padStart(9)}`}</text>
+                  </>
+                ) : (
+                  <text fg={dim}>{"—"}</text>
+                )}
+              </box>
+            )
+          })
+        )}
+      </box>
+    )
+  }
+
+  return { renderSidebar, dispose }
+}
+
+const tui: TuiPlugin = async (api, options, _meta) => {
+  const tokscale = startTokscale(options)
+  api.lifecycle.onDispose(tokscale.dispose)
 
   api.slots.register({
     order: 50,
     slots: {
       sidebar_content(ctx: TuiSlotContext, _props: unknown) {
         const t = ctx.theme.current
-        const dim = customCostColor ?? t.textMuted ?? "#546E7A"
-        const fgColor = customLabelColor ?? t.text ?? "#EEFFFF"
-
-        return (
-          <box flexDirection="column">
-            <box height={1}>
-              <text fg={tokenColor}><b>{"Tokscale"}</b></text>
-            </box>
-
-            {installed() === false ? (
-              <box height={1}>
-                <text fg={dim}>{"Install: npm i -g @tokscale/cli"}</text>
-              </box>
-            ) : (
-              TIME_PERIODS.map((period) => {
-                const state = signals[period][0]()
-                const label = PERIOD_LABELS[period]
-                return (
-                  <box height={1} flexDirection="row">
-                    <text fg={fgColor}>{`${label.padEnd(12)}`}</text>
-                    {state.status === "loading" && !state.stats ? (
-                      <text fg={dim}>{"..."}</text>
-                    ) : state.status === "error" && !state.stats ? (
-                      <text fg={dim}>{"err"}</text>
-                    ) : state.stats ? (
-                      <>
-                        <text fg={tokenColor}>{`${formatTokens(state.stats.totalTokens).padStart(7)}`}</text>
-                        <text fg={dim}>{` ${formatCost(state.stats.totalCost).padStart(9)}`}</text>
-                      </>
-                    ) : (
-                      <text fg={dim}>{"—"}</text>
-                    )}
-                  </box>
-                )
-              })
-            )}
-          </box>
-        ) as any
+        return tokscale.renderSidebar(t.text, t.textMuted) as any
       },
     },
   })
 }
 
-const plugin: TuiPluginModule & { id: string } = {
+const setup = (ctx: V2Plugin.Context) => {
+  const tokscale = startTokscale(ctx.options)
+  ctx.ui.slot({
+    append: "sidebar.content",
+    render: () => tokscale.renderSidebar(ctx.theme.text.base, ctx.theme.text.muted),
+  })
+  return tokscale.dispose
+}
+
+/**
+ * Serves both OpenCode hosts from one module: V1 calls `tui`, V2 calls `setup`.
+ */
+const plugin: TuiPluginModule & V2Plugin.Definition = {
   id: "opencode-tokscale",
   tui,
+  setup,
 }
 
 export default plugin

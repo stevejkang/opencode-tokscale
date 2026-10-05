@@ -9,7 +9,7 @@ An opencode TUI plugin that displays [tokscale](https://github.com/junhoyeo/toks
 ## Prerequisites
 
 - [opencode](https://opencode.ai) installed and working
-- Plugin support (`@opencode-ai/plugin` >= 1.4.3)
+- opencode v1 (`@opencode-ai/plugin` >= 1.4.3) or opencode v2 (>= 2.0.20)
 - [tokscale](https://github.com/junhoyeo/tokscale) CLI installed and in PATH
 
 ### Check tokscale
@@ -24,7 +24,31 @@ If not installed:
 npm i -g @tokscale/cli
 ```
 
-## Step 1: Configure the TUI plugin
+## Step 0: Detect the opencode major version
+
+Run `opencode --version`.
+
+- Output like `1.18.34` → follow **Step 1 (opencode v1)**.
+- Output like `opencode v2.0.23` → follow **Step 1 (opencode v2)**.
+
+## Step 1 (opencode v2): Configure the CLI plugin
+
+Edit `~/.config/opencode/cli.json`. Create the file if it doesn't exist. Do not edit `tui.json` on opencode v2; it is no longer read.
+
+Add `{ "package": "opencode-tokscale", "options": {} }` to the `plugins` array, appending to any existing entries:
+
+```json
+{
+  "$schema": "https://opencode.ai/v2/cli.json",
+  "plugins": [
+    { "package": "opencode-tokscale", "options": {} }
+  ]
+}
+```
+
+Skip Step 1 (opencode v1) and continue at **Options** to customize the plugin, or at **Step 2** to keep the defaults.
+
+## Step 1 (opencode v1): Configure the TUI plugin
 
 Edit `~/.config/opencode/tui.json`. Create the file if it doesn't exist.
 
@@ -51,9 +75,20 @@ Add `["opencode-tokscale", { "enabled": true }]` to the `plugin` array:
 }
 ```
 
-### Options
+## Options
 
-All options are optional. Defaults shown:
+All options are optional, and the option names and values are the same on opencode v1 and v2. Only the surrounding entry differs. Defaults shown:
+
+**opencode v2** — inside the entry's `options` object in `~/.config/opencode/cli.json`:
+
+```json
+{ "package": "opencode-tokscale", "options": {
+  "refreshInterval": 60,
+  "showOpenCodeOnly": true
+} }
+```
+
+**opencode v1** — as the second element of the plugin tuple in `~/.config/opencode/tui.json`:
 
 ```json
 ["opencode-tokscale", {
@@ -62,6 +97,8 @@ All options are optional. Defaults shown:
   "showOpenCodeOnly": true
 }]
 ```
+
+`enabled` is an opencode v1 plugin toggle, not a plugin option; do not add it on opencode v2.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -94,7 +131,7 @@ If there is no usage data yet, values show as `—`.
 
 ## Troubleshooting
 
-- **Plugin not showing**: Verify `tui.json` exists at `~/.config/opencode/tui.json` and contains the plugin entry. Restart opencode after editing.
+- **Plugin not showing**: Verify the plugin entry exists in `~/.config/opencode/tui.json` (opencode v1) or `~/.config/opencode/cli.json` (opencode v2). On opencode v2, `opencode plugin list` should list it. Restart opencode after editing. The sidebar renders only after the first message.
 - **"Install: npm i -g @tokscale/cli" message**: tokscale binary is not found in PATH. Run `npm i -g @tokscale/cli` and restart opencode.
 - **All values show $0.00**: tokscale has no session data to scan. Use opencode for a while, then check again.
 - **Data not updating**: Default refresh is 60 seconds. Wait or lower `refreshInterval` in options.
@@ -102,5 +139,10 @@ If there is no usage data yet, values show as `—`.
 
 ## Uninstall
 
-1. Remove `["opencode-tokscale", { "enabled": true }]` from `~/.config/opencode/tui.json` plugin array
+1. Remove the `opencode-tokscale` entry from `~/.config/opencode/tui.json` (opencode v1) or `~/.config/opencode/cli.json` (opencode v2)
 2. Restart opencode
+3. Optionally delete opencode's downloaded copy of the package:
+   - opencode v1: `rm -rf ~/.cache/opencode/packages/opencode-tokscale@*`
+   - opencode v2: `rm -rf ~/.cache/opencode/npm/opencode-tokscale@*`
+
+   Do not delete `~/.cache/opencode/` itself; it also holds other plugins and model data.
